@@ -122,4 +122,4 @@ else:
 
 st.divider()
 st.caption("Built with Streamlit, NumPy, and Pandas.")
-st.caption("By Carmine Zuccarini — [GitHub](https://github.com/AstroBOY92) · [LinkedIn](https://www.linkedin.com/in/YOUR-HANDLE)")
+st.caption("By Carmine Zuccarini — [GitHub](https://github.com/AstroBOY92) · [LinkedIn](https://uk.linkedin.com/in/carmine-zuccarini-phd-b4706a6)")
