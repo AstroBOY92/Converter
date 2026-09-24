@@ -2,7 +2,6 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-# import your functions from the existing module
 from temp_conv import fahrenheit_to_celsius, celsius_to_fahrenheit
 
 st.set_page_config(page_title="Temp Converter", page_icon="🌡️", layout="centered")
@@ -12,30 +11,41 @@ st.caption("Fahrenheit ↔︎ Celsius, with NumPy + Pandas")
 
 # --- Sidebar controls ---
 st.sidebar.header("Conversion Settings")
+
 direction = st.sidebar.radio(
     "Select conversion",
     ("Fahrenheit → Celsius", "Celsius → Fahrenheit"),
 )
 
-precision = st.sidebar.slider("Decimal places", 0, 6, 2)
+# Default to 1 decimal place rather than 0: at 0 dp, an input like 37.5
+# silently rounds to 38 in the results table, which reads as a bug rather
+# than a display choice.
+precision = st.sidebar.slider("Decimal places", 0, 6, 1)
 
-st.sidebar.markdown("---")
+st.sidebar.divider()
 st.sidebar.write("Input options:")
 input_mode = st.sidebar.radio(
     "How will you provide values?",
-    ("Type/Paste values", "Upload CSV file")
+    ("Type/Paste values", "Upload CSV file"),
 )
+
 
 # --- Helpers ---
 def parse_numbers(text: str) -> np.ndarray:
+    """Parse a free-text block of numbers separated by commas, spaces,
+    semicolons, or newlines into a NumPy array."""
     if not text.strip():
         return np.array([], dtype=float)
-    # support commas, spaces, semicolons, newlines
-    parts = [p for chunk in text.replace(";", ",").replace("\n", ",").split(",")
-             for p in chunk.split()]
+    parts = [
+        p
+        for chunk in text.replace(";", ",").replace("\n", ",").split(",")
+        for p in chunk.split()
+    ]
     return np.array([float(x) for x in parts if x.strip() != ""], dtype=float)
 
+
 def convert_array(arr: np.ndarray, to_celsius: bool) -> pd.DataFrame:
+    """Return a two-column DataFrame: source scale + converted scale."""
     if to_celsius:
         c_vals = fahrenheit_to_celsius(arr)
         df = pd.DataFrame({"Fahrenheit": arr, "Celsius": c_vals})
@@ -43,6 +53,7 @@ def convert_array(arr: np.ndarray, to_celsius: bool) -> pd.DataFrame:
         f_vals = celsius_to_fahrenheit(arr)
         df = pd.DataFrame({"Celsius": arr, "Fahrenheit": f_vals})
     return df
+
 
 # --- Input section ---
 st.subheader("Enter temperatures")
@@ -56,7 +67,7 @@ if input_mode == "Type/Paste values":
         "Enter numbers (comma/space/newline separated):",
         value=example,
         height=120,
-        help="You can separate values by commas, spaces, semicolons, or new lines."
+        help="You can separate values by commas, spaces, semicolons, or new lines.",
     )
     try:
         values_array = parse_numbers(text)
@@ -68,7 +79,6 @@ else:
     if file is not None:
         try:
             df_in = pd.read_csv(file)
-            # take the first numeric column
             num_cols = [c for c in df_in.columns if pd.api.types.is_numeric_dtype(df_in[c])]
             if not num_cols:
                 st.error("No numeric columns found. Please upload a CSV with at least one numeric column.")
@@ -85,15 +95,15 @@ if values_array is None or values_array.size == 0:
 else:
     to_celsius = direction.startswith("Fahrenheit")
     df_out = convert_array(values_array, to_celsius)
+    df_rounded = df_out.round(precision)
+
     st.subheader("Results")
-    st.dataframe(df_out.round(precision), use_container_width=True)
+    st.dataframe(df_rounded, use_container_width=True, hide_index=True)
 
-    # Simple summary stats
     with st.expander("Show summary statistics"):
-        st.write(df_out.round(precision).describe())
+        st.write(df_rounded.describe())
 
-    # Download buttons
-    csv_bytes = df_out.round(precision).to_csv(index=False).encode("utf-8")
+    csv_bytes = df_rounded.to_csv(index=False).encode("utf-8")
     st.download_button(
         "Download CSV",
         data=csv_bytes,
@@ -101,12 +111,15 @@ else:
         mime="text/csv",
     )
 
-    # Quick chart (just for fun)
+    # Quick visualization: plot the converted scale AGAINST the source
+    # scale, not against row order, so the linear relationship is
+    # actually readable at a glance.
     st.subheader("Quick visualization")
-    if to_celsius:
-        st.line_chart(df_out[["Fahrenheit", "Celsius"]])
-    else:
-        st.line_chart(df_out[["Celsius", "Fahrenheit"]])
+    source_col, converted_col = df_rounded.columns[0], df_rounded.columns[1]
+    chart_df = df_rounded.sort_values(source_col).set_index(source_col)
+    st.line_chart(chart_df[[converted_col]])
+    st.caption(f"{converted_col} as a function of {source_col}")
 
-st.markdown("---")
+st.divider()
 st.caption("Built with Streamlit, NumPy, and Pandas.")
+st.caption("By Carmine Zuccarini — [GitHub](https://github.com/AstroBOY92) · [LinkedIn](https://www.linkedin.com/in/YOUR-HANDLE)")
